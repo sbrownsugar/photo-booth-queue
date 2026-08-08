@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ระบบคิว Photo Booth</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --line:#e2e5ea; --text:#1c1f26; --muted:#6b7280;
+    --brand:#e0447a; --brand-dark:#c2325f; --ok:#16a34a; --warn:#d97706; --danger:#dc2626;
+    --radius:14px; --shadow:0 1px 3px rgba(0,0,0,.07), 0 6px 18px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0}
+  body{
+    font-family:'Sarabun','Segoe UI',system-ui,sans-serif;
+    background:var(--bg); color:var(--text); font-size:16px;
+  }
+  button{font-family:inherit; font-size:inherit; cursor:pointer; border:none; border-radius:10px}
+  input,select{font-family:inherit; font-size:inherit}
+
+  /* ---------- โครงหน้าพนักงาน ---------- */
+  #staff{max-width:1180px; margin:0 auto; padding:16px}
+  header.bar{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 18px; box-shadow:var(--shadow); margin-bottom:16px;
+  }
+  header.bar h1{font-size:19px; margin:0; flex:1}
+  header.bar h1 span{color:var(--muted); font-weight:400; font-size:14px; display:block}
+  .btn{padding:10px 16px; background:#eef0f4; color:var(--text); font-weight:600}
+  .btn:hover{background:#e3e6ec}
+  .btn.primary{background:var(--brand); color:#fff}
+  .btn.primary:hover{background:var(--brand-dark)}
+  .btn.ghost{background:transparent; border:1px solid var(--line)}
+  .btn:disabled{opacity:.45; cursor:not-allowed}
+
+  .grid{display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; align-items:start}
+  @media(max-width:900px){ .grid{grid-template-columns:1fr} }
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+        box-shadow:var(--shadow); padding:18px; margin-bottom:16px}
+  .card h2{font-size:15px; margin:0 0 14px; color:var(--muted); font-weight:700;
+           letter-spacing:.03em; text-transform:uppercase}
+
+  /* ฟอร์มเพิ่มคิว */
+  .addform{display:grid; grid-template-columns:1fr 110px 1fr auto; gap:10px}
+  @media(max-width:700px){ .addform{grid-template-columns:1fr 1fr} .addform .wide{grid-column:1/-1} }
+  .addform input,.addform select{
+    padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:#fbfbfc; width:100%
+  }
+  .addform input:focus,.addform select:focus{outline:2px solid var(--brand); outline-offset:-1px; background:#fff}
+
+  /* คิวที่กำลังถ่าย */
+  .serving{
+    background:linear-gradient(135deg,var(--brand),#f2709c); color:#fff;
+    border:none; display:flex; align-items:center; gap:20px; flex-wrap:wrap
+  }
+  .serving .no{font-size:56px; font-weight:800; line-height:1; letter-spacing:.02em}
+  .serving .meta{flex:1; min-width:160px}
+  .serving .meta .nm{font-size:19px; font-weight:700}
+  .serving .meta .sub{opacity:.85; font-size:14px; margin-top:3px}
+  .serving .acts{display:flex; gap:8px; flex-wrap:wrap}
+  .serving .acts .btn{background:rgba(255,255,255,.2); color:#fff}
+  .serving .acts .btn:hover{background:rgba(255,255,255,.32)}
+  .serving .acts .btn.done{background:#fff; color:var(--brand-dark)}
+  .empty{color:var(--muted); text-align:center; padding:26px 10px}
+
+  /* รายการคิว */
+  ul.qlist{list-style:none; margin:0; padding:0}
+  ul.qlist li{
+    display:flex; align-items:center; gap:14px; padding:12px 4px;
+    border-bottom:1px solid var(--line)
+  }
+  ul.qlist li:last-child{border-bottom:none}
+  .qno{font-size:22px; font-weight:800; width:74px; color:var(--brand)}
+  .qinfo{flex:1; min-width:0}
+  .qinfo .nm{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .qinfo .sub{font-size:13px; color:var(--muted); margin-top:2px}
+  .qacts{display:flex; gap:6px}
+  .qacts .btn{padding:7px 12px; font-size:14px}
+  .tag{font-size:12px; padding:3px 9px; border-radius:99px; font-weight:700}
+  .tag.skip{background:#fef3c7; color:#92400e}
+
+  /* สถิติ */
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .stat{background:#f8f9fb; border-radius:10px; padding:14px}
+  .stat .v{font-size:26px; font-weight:800}
+  .stat .k{font-size:12px; color:var(--muted); margin-top:2px}
+
+  /* ---------- จอประกาศ ---------- */
+  #display{display:none; position:fixed; inset:0; background:#12121a; color:#fff;
+           padding:3vh 4vw; overflow:hidden}
+  body.display-mode{overflow:hidden}
+  body.display-mode #staff{display:none}
+  body.display-mode #display{display:flex; flex-direction:column}
+  #display .dhead{display:flex; align-items:center; justify-content:space-between; opacity:.55; font-size:2.2vh}
+  #display .dbody{flex:1; display:flex; align-items:center; gap:5vw; min-height:0}
+  #display .now{flex:1.4; text-align:center}
+  #display .now .label{font-size:3.4vh; letter-spacing:.35em; color:#f2709c; font-weight:700}
+  #display .now .big{font-size:26vh; font-weight:900; line-height:.95; margin:2vh 0;
+                     text-shadow:0 0 60px rgba(242,112,156,.45)}
+  #display .now .nm{font-size:4vh; opacity:.8}
+  #display .next{flex:1; border-left:1px solid rgba(255,255,255,.14); padding-left:4vw; min-width:0}
+  #display .next h3{font-size:2.6vh; letter-spacing:.2em; color:#f2709c; margin:0 0 2vh}
+  #display .next ul{list-style:none; margin:0; padding:0}
+  #display .next li{display:flex; align-items:baseline; gap:1.6vw; padding:1.4vh 0;
+                    border-bottom:1px solid rgba(255,255,255,.08); font-size:4.4vh; font-weight:800}
+  #display .next li .nm2{font-size:2.4vh; font-weight:400; opacity:.6;
+                         white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  #display .dfoot{text-align:center; font-size:2.6vh; opacity:.55}
+  #display .exit{position:fixed; top:14px; right:14px; background:rgba(255,255,255,.12); color:#fff;
+                 padding:8px 14px; font-size:14px; opacity:.25}
+  #display .exit:hover{opacity:1}
+  .flash{animation:flash 1s ease-in-out 3}
+  @keyframes flash{50%{opacity:.25}}
+
+  /* ---------- QR + สถานะการเชื่อมต่อ ---------- */
+  .dot{display:inline-block; width:9px; height:9px; border-radius:50%; background:#9ca3af; margin-right:7px}
+  .dot.on{background:var(--ok); box-shadow:0 0 0 3px rgba(22,163,74,.18)}
+  .dot.off{background:var(--danger); box-shadow:0 0 0 3px rgba(220,38,38,.15)}
+  .conn{font-size:13px; color:var(--muted); display:flex; align-items:center; white-space:nowrap}
+
+  #qrBox{display:flex; justify-content:center; padding:6px 0 12px}
+  #qrBox img,#qrBox canvas{border-radius:8px; display:block}
+  .qrhint{font-size:13px; color:var(--muted); text-align:center; line-height:1.6}
+  .urlrow{display:flex; gap:8px; margin-top:12px}
+  .urlrow input{flex:1; min-width:0; padding:9px 11px; border:1px solid var(--line);
+                border-radius:9px; font-size:13px; background:#fbfbfc}
+  .warnbox{background:#fef3c7; color:#92400e; border-radius:10px; padding:12px 14px;
+           font-size:13.5px; line-height:1.65}
+
+  /* QR บนจอประกาศ */
+  #display .dfoot{display:flex; align-items:center; justify-content:center; gap:2.5vw}
+  #display .dqr{background:#fff; padding:1vh; border-radius:1vh; line-height:0}
+  #display .dqr:empty{display:none}
+  #display .dqr img,#display .dqr canvas{width:11vh; height:11vh; display:block}
+  #display .dqrtext{font-size:2.2vh; opacity:.75; text-align:left}
+</style>
+</head>
+<body>
+
+<!-- ============ หน้าพนักงาน ============ -->
+<div id="staff">
+  <header class="bar">
+    <h1>ระบบคิว Photo Booth <span id="todayLabel"></span></h1>
+    <div class="conn" id="connState"><span class="dot"></span>กำลังเชื่อมต่อ…</div>
+    <button class="btn" onclick="openDisplay()">🖥️ เปิดจอประกาศ</button>
+    <button class="btn ghost" onclick="exportCSV()">⬇️ บันทึกไฟล์</button>
+    <button class="btn ghost" onclick="resetDay()">♻️ เริ่มวันใหม่</button>
+  </header>
+
+  <div class="card">
+    <h2>เพิ่มคิวใหม่</h2>
+    <form class="addform" onsubmit="addQueue(event)">
+      <input id="fName" class="wide" placeholder="ชื่อลูกค้า (ไม่ใส่ก็ได้)" autocomplete="off">
+      <input id="fPeople" type="number" min="1" max="30" value="2" title="จำนวนคน">
+      <select id="fPkg"></select>
+      <button class="btn primary" type="submit">+ รับคิว</button>
+    </form>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card serving" id="servingCard"></div>
+      <div class="card">
+        <h2>คิวที่รออยู่ (<span id="waitCount">0</span>)</h2>
+        <ul class="qlist" id="waitList"></ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>สรุปวันนี้</h2>
+        <div class="stats">
+          <div class="stat"><div class="v" id="stDone">0</div><div class="k">ถ่ายเสร็จแล้ว</div></div>
+          <div class="stat"><div class="v" id="stWait">0</div><div class="k">รออยู่</div></div>
+          <div class="stat"><div class="v" id="stAvg">–</div><div class="k">เวลาเฉลี่ย/คิว</div></div>
+          <div class="stat"><div class="v" id="stPeople">0</div><div class="k">คนที่ถ่ายไปแล้ว</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>QR ให้ลูกค้าเช็กคิว</h2>
+        <div id="qrBox"></div>
+        <div class="qrhint" id="qrHint"></div>
+        <div class="urlrow">
+          <input id="baseUrl" placeholder="https://ชื่อคุณ.github.io/photo-booth-queue/">
+          <button class="btn" onclick="saveBaseUrl()">บันทึก</button>
+        </div>
+        <div class="urlrow">
+          <button class="btn ghost" style="flex:1" onclick="printQR()">🖨️ พิมพ์ป้าย QR</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>ประวัติล่าสุด</h2>
+        <ul class="qlist" id="histList"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ จอประกาศ ============ -->
+<div id="display">
+  <div class="dhead"><div>PHOTO BOOTH</div><div id="dClock"></div></div>
+  <div class="dbody">
+    <div class="now">
+      <div class="label">คิวปัจจุบัน</div>
+      <div class="big" id="dBig">–</div>
+      <div class="nm" id="dName"></div>
+    </div>
+    <div class="next">
+      <h3>คิวถัดไป</h3>
+      <ul id="dNext"></ul>
+    </div>
+  </div>
+  <div class="dfoot">
+    <div class="dqr" id="dQR"></div>
+    <div>
+      <div id="dFoot"></div>
+      <div class="dqrtext" id="dQRText"></div>
+    </div>
+  </div>
+  <button class="exit" onclick="closeDisplay()">ออกจากจอประกาศ</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+/* ============================================================
+   ข้อมูลทั้งหมดเก็บใน localStorage ของเบราว์เซอร์
+   → ไม่ต้องใช้อินเทอร์เน็ต และ 2 หน้าต่างเห็นข้อมูลตรงกันทันที
+   ============================================================ */
+const KEY = 'pbq_v1';
+const PREFIX = 'A';
+const PACKAGES = [
+  { id:'solo',  name:'เดี่ยว/คู่',  minutes:3 },
+  { id:'group', name:'กลุ่ม',      minutes:5 },
+  { id:'big',   name:'กลุ่มใหญ่',  minutes:8 },
+];
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+let state = load();
+
+function blank(){ return { date: todayStr(), lastNumber: 0, queues: [] }; }
+
+function load(){
+  let s;
+  try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){ s = null; }
+  if (!s || !Array.isArray(s.queues)) s = blank();
+  // ขึ้นวันใหม่ = รีเซ็ตเลขคิวอัตโนมัติ (เก็บของเก่าไว้ก่อน)
+  if (s.date !== todayStr()) {
+    if (s.queues.length) localStorage.setItem(KEY + '_archive_' + s.date, JSON.stringify(s));
+    s = blank();
+  }
+  return s;
+}
+function save(){
+  state.date = todayStr();
+  localStorage.setItem(KEY, JSON.stringify(state));   // แหล่งข้อมูลหลัก — ทำงานได้แม้เน็ตหลุด
+  render();
+  pushCloud();                                        // ส่งสำเนาให้มือถือลูกค้าอ่าน (ถ้าเน็ตมี)
+}
+
+/* ============================================================
+   ตั้งค่าร้าน + Firebase + QR
+   ============================================================ */
+const SET_KEY = 'pbq_settings';
+
+function loadSettings(){
+  let s;
+  try { s = JSON.parse(localStorage.getItem(SET_KEY)); } catch(e){ s = null; }
+  if (!s) s = {};
+  if (!s.boothId) {                                   // รหัสบูธ สุ่มครั้งเดียว ใช้ตลอด
+    s.boothId = 'b' + Math.random().toString(36).slice(2,8);
+  }
+  if (!s.baseUrl && location.protocol.startsWith('http')) {
+    s.baseUrl = location.href.replace(/[^/]*$/, '');   // เปิดจาก GitHub Pages → เดาลิงก์ให้เอง
+  }
+  return s;
+}
+let settings = loadSettings();
+function saveSettings(){ localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
+
+function statusUrl(){
+  if (!settings.baseUrl) return '';
+  const base = settings.baseUrl.trim()
+    .replace(/index\.html.*$/i, '')                   // เผื่อวางลิงก์ที่มี index.html ติดมา
+    .replace(/\/?$/, '/');
+  return base + 'status.html?b=' + settings.boothId;
+}
+
+function saveBaseUrl(){
+  const v = document.getElementById('baseUrl').value.trim();
+  if (v && !/^https?:\/\//i.test(v)) { alert('ลิงก์ต้องขึ้นต้นด้วย https:// นะครับ'); return; }
+  settings.baseUrl = v;
+  saveSettings();
+  renderQR();
+}
+
+/* ---------- วาด QR ---------- */
+let lastQRUrl = null;
+function renderQR(){
+  const url  = statusUrl();
+  const box  = document.getElementById('qrBox');
+  const hint = document.getElementById('qrHint');
+  document.getElementById('baseUrl').value = settings.baseUrl || '';
+
+  if (!url) {
+    box.innerHTML = '';
+    hint.innerHTML = '<div class="warnbox">ยังไม่ได้ใส่ลิงก์เว็บ — ใส่ลิงก์ GitHub Pages ของคุณในช่องข้างล่าง ' +
+                     'แล้ว QR จะขึ้นมาเองครับ</div>';
+    drawQRInto(document.getElementById('dQR'), null, 0);
+    document.getElementById('dQRText').textContent = '';
+    return;
+  }
+  if (url !== lastQRUrl) {
+    drawQRInto(box, url, 170);
+    lastQRUrl = url;
+  }
+  hint.innerHTML = (typeof QRCode === 'undefined'
+      ? '<div class="warnbox">โหลดตัวสร้าง QR ไม่ได้ (ไม่มีเน็ต) — ลิงก์ยังใช้ได้ปกติ</div>'
+      : 'ลูกค้าสแกนแล้วเห็นคิวขยับแบบเรียลไทม์') +
+    '<br><span style="font-size:11.5px;opacity:.7;word-break:break-all">' + esc(url) + '</span>';
+  drawQRInto(document.getElementById('dQR'), url, 150);
+  document.getElementById('dQRText').textContent = 'สแกนเช็กคิวจากมือถือได้เลย';
+}
+
+function drawQRInto(el, url, size){
+  if (!el) return;
+  el.innerHTML = '';
+  if (!url || typeof QRCode === 'undefined') return;
+  try {
+    new QRCode(el, { text:url, width:size, height:size,
+                     colorDark:'#12121a', colorLight:'#ffffff',
+                     correctLevel: QRCode.CorrectLevel.M });
+  } catch(e){ console.error('สร้าง QR ไม่ได้', e); }
+}
+
+function printQR(){
+  const url = statusUrl();
+  if (!url) { alert('ใส่ลิงก์เว็บก่อนนะครับ'); return; }
+  const w = window.open('', '_blank', 'width=760,height=940');
+  if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป — กรุณาอนุญาตป๊อปอัป'); return; }
+  w.document.write(
+    '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>ป้าย QR เช็กคิว</title>' +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>' +
+    '<style>body{font-family:Sarabun,Segoe UI,sans-serif;text-align:center;padding:60px 40px;margin:0}' +
+    'h1{font-size:46px;margin:0 0 6px}h2{font-size:24px;color:#e0447a;margin:0 0 40px;font-weight:600}' +
+    '#q{display:flex;justify-content:center}p{font-size:22px;color:#555;margin-top:36px;line-height:1.7}' +
+    '</style></head><body><h1>สแกนเช็กคิวของคุณ</h1><h2>PHOTO BOOTH</h2><div id="q"></div>' +
+    '<p>เปิดค้างไว้ได้เลย<br>หน้าจอจะบอกเองว่าเหลืออีกกี่คิว</p>' +
+    '<script>new QRCode(document.getElementById("q"),{text:' + JSON.stringify(url) +
+    ',width:400,height:400,correctLevel:QRCode.CorrectLevel.M});' +
+    'setTimeout(function(){window.print()},600);<\/script></body></html>'
+  );
+  w.document.close();
+}
+
+/* ---------- ส่งข้อมูลขึ้น Firebase ---------- */
+let dbRef = null;
+function setConn(cls, text){
+  const el = document.getElementById('connState');
+  if (el) el.innerHTML = '<span class="dot ' + cls + '"></span>' + text;
+}
+
+function initCloud(){
+  const cfg = window.FIREBASE_CONFIG;
+  const unset = v => !v || String(v).indexOf('ใส่ค่าจริง') !== -1;
+  if (!cfg || unset(cfg.databaseURL) || unset(cfg.apiKey)) {
+    setConn('off', 'ยังไม่ได้ตั้งค่า Firebase (QR ยังใช้ไม่ได้)');
+    return;
+  }
+  try {
+    firebase.initializeApp(cfg);
+    dbRef = firebase.database().ref('booths/' + settings.boothId);
+    firebase.database().ref('.info/connected').on('value', s => {
+      if (s.val()) { setConn('on', 'ออนไลน์ — ลูกค้าเช็กคิวได้'); pushCloud(); }
+      else setConn('off', 'ออฟไลน์ — หน้าร้านยังใช้ได้ปกติ');
+    });
+  } catch(e){
+    setConn('off', 'เชื่อมต่อ Firebase ไม่ได้');
+    console.error(e);
+  }
+}
+
+function pushCloud(){
+  if (!dbRef) return;
+  const s = serving(), w = waiting();
+  dbRef.set({
+    serving: s ? { no:s.no, name:s.name || '', startedAt:s.startedAt } : null,
+    waiting: w.slice(0,20).map(q => ({ no:q.no, name:q.name || '' })),
+    waitCount: w.length,
+    avgMinutes: avgMinutes() || null,
+    updatedAt: Date.now(),
+  }).catch(e => console.error('ส่งข้อมูลไม่สำเร็จ', e));
+}
+
+/* ---------- การกระทำกับคิว ---------- */
+function addQueue(ev){
+  ev.preventDefault();
+  const name   = document.getElementById('fName').value.trim();
+  const people = Math.max(1, parseInt(document.getElementById('fPeople').value) || 1);
+  const pkg    = document.getElementById('fPkg').value;
+
+  state.lastNumber++;
+  state.queues.push({
+    id: state.date + '-' + state.lastNumber,
+    no: PREFIX + String(state.lastNumber).padStart(3,'0'),
+    name, people, pkg,
+    status: 'waiting',
+    createdAt: Date.now(), startedAt: null, endedAt: null,
+  });
+  document.getElementById('fName').value = '';
+  document.getElementById('fPeople').value = 2;
+  save();
+  document.getElementById('fName').focus();
+}
+
+function serving(){ return state.queues.find(q => q.status === 'serving') || null; }
+function waiting(){ return state.queues.filter(q => q.status === 'waiting'); }
+
+function callNext(){
+  if (serving()) return;                       // ต้องปิดคิวปัจจุบันก่อน
+  const next = waiting()[0];
+  if (!next) return;
+  next.status = 'serving';
+  next.startedAt = Date.now();
+  save();
+}
+function finishServing(){
+  const s = serving(); if (!s) return;
+  s.status = 'done'; s.endedAt = Date.now();
+  save();
+  callNext();                                   // เรียกคิวถัดไปให้เลย
+}
+function skipServing(){
+  const s = serving(); if (!s) return;
+  s.status = 'waiting'; s.startedAt = null; s.skipped = true;
+  state.queues.splice(state.queues.indexOf(s), 1);
+  state.queues.push(s);                         // ดันไปต่อท้าย ไม่ลบทิ้ง
+  save();
+}
+function cancelQueue(id){
+  const q = state.queues.find(x => x.id === id); if (!q) return;
+  if (!confirm('ยกเลิกคิว ' + q.no + ' ใช่ไหม?')) return;
+  q.status = 'cancelled'; q.endedAt = Date.now();
+  save();
+}
+function bumpToTop(id){
+  const q = state.queues.find(x => x.id === id); if (!q || q.status !== 'waiting') return;
+  const first = waiting()[0]; if (!first || first.id === id) return;
+  state.queues.splice(state.queues.indexOf(q), 1);
+  state.queues.splice(state.queues.indexOf(first), 0, q);
+  save();
+}
+function restore(id){
+  const q = state.queues.find(x => x.id === id); if (!q) return;
+  q.status = 'waiting'; q.endedAt = null; q.startedAt = null;
+  state.queues.splice(state.queues.indexOf(q), 1);
+  state.queues.push(q);                         // คืนคิวแล้วไปต่อท้าย ไม่แซงคนที่รออยู่
+  save();
+}
+
+function resetDay(){
+  if (!confirm('เริ่มวันใหม่ = ล้างคิวทั้งหมดและเริ่มนับ A001 ใหม่\n(ข้อมูลเก่าจะถูกเก็บสำรองไว้) ดำเนินการต่อ?')) return;
+  if (state.queues.length) localStorage.setItem(KEY + '_archive_' + state.date + '_' + Date.now(), JSON.stringify(state));
+  state = blank();
+  save();
+}
+
+/* ---------- คำนวณ ---------- */
+function pkgOf(id){ return PACKAGES.find(p => p.id === id) || PACKAGES[0]; }
+
+function avgMinutes(){
+  const done = state.queues.filter(q => q.status === 'done' && q.startedAt && q.endedAt);
+  if (done.length < 3) return null;                       // ตัวอย่างน้อยเกินไป ยังไม่เชื่อถือ
+  const total = done.reduce((a,q) => a + (q.endedAt - q.startedAt), 0);
+  return total / done.length / 60000;
+}
+function waitMinutesFor(index){
+  const avg = avgMinutes();
+  const list = waiting().slice(0, index);
+  const s = serving();
+  let m = s ? (avg || pkgOf(s.pkg).minutes) : 0;
+  for (const q of list) m += avg || pkgOf(q.pkg).minutes;
+  return Math.round(m);
+}
+
+/* ---------- แสดงผลหน้าพนักงาน ---------- */
+function render(){
+  document.getElementById('todayLabel').textContent =
+    new Date().toLocaleDateString('th-TH',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+  const s = serving(), w = waiting();
+
+  // การ์ดคิวที่กำลังถ่าย
+  const card = document.getElementById('servingCard');
+  if (s) {
+    const mins = s.startedAt ? Math.floor((Date.now() - s.startedAt)/60000) : 0;
+    card.style.display = 'flex';
+    card.innerHTML =
+      '<div class="no">' + s.no + '</div>' +
+      '<div class="meta"><div class="nm">' + esc(s.name || 'ลูกค้า') + '</div>' +
+        '<div class="sub">' + s.people + ' คน · ' + pkgOf(s.pkg).name + ' · เริ่มไป ' + mins + ' นาที</div></div>' +
+      '<div class="acts">' +
+        '<button class="btn done" onclick="finishServing()">✓ เสร็จแล้ว</button>' +
+        '<button class="btn" onclick="skipServing()">↷ ไม่มา (ข้าม)</button>' +
+        '<button class="btn" onclick="cancelQueue(\'' + s.id + '\')">✕ ยกเลิก</button>' +
+      '</div>';
+  } else {
+    card.style.display = 'block';
+    card.style.background = '#fff'; card.style.color = 'var(--text)';
+    card.innerHTML = w.length
+      ? '<div class="empty" style="padding:14px"><button class="btn primary" style="padding:16px 34px;font-size:19px" onclick="callNext()">▶ เรียกคิวถัดไป (' + w[0].no + ')</button></div>'
+      : '<div class="empty">ยังไม่มีคิว — กด “+ รับคิว” ด้านบนเพื่อเริ่ม</div>';
+  }
+  if (s) { card.style.background = ''; card.style.color = ''; }
+
+  // รายการคิวที่รอ
+  document.getElementById('waitCount').textContent = w.length;
+  const ul = document.getElementById('waitList');
+  ul.innerHTML = w.length ? w.map((q,i) =>
+    '<li><div class="qno">' + q.no + '</div>' +
+    '<div class="qinfo"><div class="nm">' + esc(q.name || 'ลูกค้า') +
+      (q.skipped ? ' <span class="tag skip">เคยข้าม</span>' : '') + '</div>' +
+      '<div class="sub">' + q.people + ' คน · ' + pkgOf(q.pkg).name +
+      ' · รออีกประมาณ ' + waitMinutesFor(i) + ' นาที</div></div>' +
+    '<div class="qacts">' +
+      (i > 0 ? '<button class="btn" onclick="bumpToTop(\'' + q.id + '\')">⇧ เรียกก่อน</button>' : '') +
+      '<button class="btn" onclick="cancelQueue(\'' + q.id + '\')">ยกเลิก</button>' +
+    '</div></li>'
+  ).join('') : '<li><div class="empty" style="width:100%">ไม่มีคิวรออยู่</div></li>';
+
+  // สถิติ
+  const done = state.queues.filter(q => q.status === 'done');
+  document.getElementById('stDone').textContent = done.length;
+  document.getElementById('stWait').textContent = w.length;
+  document.getElementById('stPeople').textContent = done.reduce((a,q) => a + q.people, 0);
+  const avg = avgMinutes();
+  document.getElementById('stAvg').textContent = avg ? avg.toFixed(1) + ' น.' : '–';
+
+  // ประวัติ
+  const hist = state.queues.filter(q => q.status === 'done' || q.status === 'cancelled')
+                           .sort((a,b) => (b.endedAt||0) - (a.endedAt||0)).slice(0,8);
+  document.getElementById('histList').innerHTML = hist.length ? hist.map(q =>
+    '<li><div class="qno" style="font-size:17px;width:56px;color:' +
+      (q.status === 'done' ? 'var(--ok)' : 'var(--muted)') + '">' + q.no + '</div>' +
+    '<div class="qinfo"><div class="sub">' + (q.status === 'done' ? 'เสร็จ' : 'ยกเลิก') + ' ' +
+      new Date(q.endedAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) + '</div></div>' +
+    '<div class="qacts"><button class="btn" onclick="restore(\'' + q.id + '\')">คืนคิว</button></div></li>'
+  ).join('') : '<li><div class="empty" style="width:100%">ยังไม่มี</div></li>';
+
+  renderDisplay();
+}
+
+function esc(t){ return String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------- แสดงผลจอประกาศ ---------- */
+let lastAnnounced = null;
+
+function renderDisplay(){
+  const s = serving(), w = waiting();
+  document.getElementById('dBig').textContent  = s ? s.no : '–';
+  document.getElementById('dName').textContent = s ? (s.name || '') : 'รอเรียกคิว';
+  document.getElementById('dNext').innerHTML = w.slice(0,5).map(q =>
+    '<li><span>' + q.no + '</span><span class="nm2">' + esc(q.name || '') + '</span></li>'
+  ).join('') || '<li style="opacity:.4;font-size:3vh;font-weight:400">ไม่มีคิวรออยู่</li>';
+  document.getElementById('dFoot').textContent =
+    w.length ? 'มีคิวรออยู่ ' + w.length + ' คิว · รอประมาณ ' + waitMinutesFor(w.length) + ' นาที' : '';
+
+  // มีคิวใหม่ถูกเรียก → ส่งเสียง (เฉพาะหน้าต่างที่เป็นจอประกาศ)
+  const id = s ? s.id : null;
+  if (document.body.classList.contains('display-mode') && id && id !== lastAnnounced) {
+    announce(s);
+    document.getElementById('dBig').classList.remove('flash');
+    void document.getElementById('dBig').offsetWidth;
+    document.getElementById('dBig').classList.add('flash');
+  }
+  lastAnnounced = id;
+}
+
+function announce(q){
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [880, 1174].forEach((f,i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f; o.type = 'sine';
+      o.connect(g); g.connect(ctx.destination);
+      const t = ctx.currentTime + i*0.28;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      o.start(t); o.stop(t + 0.6);
+    });
+  } catch(e){}
+  try {
+    if (window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance('เชิญคิวหมายเลข ' + q.no.split('').join(' ') + ' ค่ะ');
+      u.lang = 'th-TH'; u.rate = 0.9;
+      setTimeout(() => speechSynthesis.speak(u), 900);
+    }
+  } catch(e){}
+}
+
+function openDisplay(){
+  const win = window.open(location.pathname + '#display', 'pbq_display',
+                          'width=1280,height=720,menubar=no,toolbar=no');
+  if (!win) alert('เบราว์เซอร์บล็อกป๊อปอัป — กรุณาอนุญาตป๊อปอัปของหน้านี้');
+}
+function closeDisplay(){ location.hash = ''; applyMode(); }
+function applyMode(){
+  const on = location.hash === '#display';
+  document.body.classList.toggle('display-mode', on);
+  if (on) { lastAnnounced = serving() ? serving().id : null; }
+  render();
+}
+
+/* ---------- ส่งออกไฟล์ CSV ---------- */
+function exportCSV(){
+  const rows = [['เลขคิว','ชื่อ','จำนวนคน','แพ็กเกจ','สถานะ','เวลารับคิว','เวลาเริ่ม','เวลาเสร็จ','ใช้เวลา(นาที)']];
+  const tm = t => t ? new Date(t).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '';
+  state.queues.forEach(q => rows.push([
+    q.no, q.name || '', q.people, pkgOf(q.pkg).name,
+    ({waiting:'รออยู่', serving:'กำลังถ่าย', done:'เสร็จ', cancelled:'ยกเลิก'})[q.status] || q.status,
+    tm(q.createdAt), tm(q.startedAt), tm(q.endedAt),
+    (q.startedAt && q.endedAt) ? ((q.endedAt - q.startedAt)/60000).toFixed(1) : ''
+  ]));
+  const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'คิว-' + state.date + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ---------- ซิงก์ระหว่างหน้าต่าง + นาฬิกา ---------- */
+window.addEventListener('storage', e => {          // อีกหน้าต่างบันทึกข้อมูล → โหลดใหม่
+  if (e.key === KEY)     { state = load(); render(); }
+  if (e.key === SET_KEY) { settings = loadSettings(); renderQR(); }
+});
+window.addEventListener('hashchange', applyMode);
+setInterval(() => {
+  document.getElementById('dClock').textContent =
+    new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  if (!document.body.classList.contains('display-mode')) render();   // อัปเดตตัวนับนาที
+}, 15000);
+
+// เติมตัวเลือกแพ็กเกจ
+document.getElementById('fPkg').innerHTML =
+  PACKAGES.map(p => '<option value="' + p.id + '">' + p.name + ' (~' + p.minutes + ' น.)</option>').join('');
+
+document.getElementById('dClock').textContent =
+  new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+
+saveSettings();
+applyMode();
+renderQR();
+
+// หน้าต่างจอประกาศไม่ต้องเขียนข้อมูลขึ้นคลาวด์ — ให้หน้าพนักงานเป็นคนส่งคนเดียว
+if (location.hash !== '#display') initCloud();
+else setConn('', '');
+</script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12121a">
+<title>เช็กคิว Photo Booth</title>
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{
+    margin:0; padding:24px 20px 40px; min-height:100vh;
+    font-family:'Sarabun','Segoe UI',system-ui,sans-serif;
+    background:#12121a; color:#fff;
+    display:flex; flex-direction:column; align-items:center; gap:20px;
+  }
+  .wrap{width:100%; max-width:440px}
+  .card{background:#1c1c28; border:1px solid #2c2c3d; border-radius:18px; padding:22px; margin-bottom:16px}
+  .label{font-size:13px; letter-spacing:.22em; color:#f2709c; font-weight:700; text-align:center}
+  .big{font-size:82px; font-weight:900; line-height:1; text-align:center; margin:10px 0 4px;
+       text-shadow:0 0 50px rgba(242,112,156,.4)}
+  .sub{text-align:center; opacity:.6; font-size:15px}
+
+  /* กล่องคิวของฉัน */
+  #mine{background:linear-gradient(140deg,#e0447a,#f2709c); border:none; text-align:center}
+  #mine .mno{font-size:15px; opacity:.85; font-weight:600}
+  #mine .left{font-size:64px; font-weight:900; line-height:1.05; margin:6px 0}
+  #mine .est{font-size:17px; opacity:.9}
+  #mine .chg{background:rgba(255,255,255,.22); color:#fff; border:none; border-radius:99px;
+             padding:8px 18px; font-size:14px; margin-top:16px; cursor:pointer; font-family:inherit}
+
+  .setup{text-align:center}
+  .setup p{opacity:.65; font-size:15px; margin:0 0 16px}
+  .setup input{
+    width:100%; padding:16px; font-size:26px; text-align:center; font-weight:800; letter-spacing:.12em;
+    background:#12121a; border:1px solid #3a3a50; border-radius:12px; color:#fff;
+    font-family:inherit; text-transform:uppercase;
+  }
+  .setup input:focus{outline:2px solid #f2709c; outline-offset:-1px}
+  .setup button{
+    width:100%; margin-top:12px; padding:16px; font-size:17px; font-weight:700;
+    background:#e0447a; color:#fff; border:none; border-radius:12px; font-family:inherit; cursor:pointer
+  }
+
+  ul.next{list-style:none; margin:0; padding:0}
+  ul.next li{display:flex; align-items:baseline; gap:12px; padding:11px 0; border-bottom:1px solid #2c2c3d;
+             font-size:22px; font-weight:800}
+  ul.next li:last-child{border-bottom:none}
+  ul.next li.me{color:#f2709c}
+  ul.next li .nm{font-size:14px; font-weight:400; opacity:.5; overflow:hidden;
+                 text-overflow:ellipsis; white-space:nowrap}
+  h3{font-size:13px; letter-spacing:.18em; color:#8b8ba7; margin:0 0 12px; font-weight:700}
+  .foot{text-align:center; font-size:13px; opacity:.4; padding-bottom:20px}
+  .stale{background:#7c2d12; color:#fed7aa; padding:12px 16px; border-radius:12px;
+         font-size:14px; text-align:center; margin-bottom:16px; display:none}
+  .pulse{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.55}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="stale" id="stale">⚠️ ข้อมูลอาจไม่ใช่ล่าสุด — เช็กกับพนักงานหน้าร้านอีกครั้งนะครับ</div>
+
+  <!-- คิวของฉัน (แสดงเมื่อกรอกเลขคิวแล้ว) -->
+  <div class="card" id="mine" style="display:none"></div>
+
+  <!-- กรอกเลขคิว -->
+  <div class="card setup" id="setup">
+    <div class="label">เช็กคิวของคุณ</div>
+    <p style="margin-top:12px">ใส่เลขคิวที่พนักงานแจ้ง แล้วเปิดหน้านี้ค้างไว้ได้เลย</p>
+    <input id="myNo" placeholder="A001" autocomplete="off" enterkeyhint="done"
+           inputmode="text" maxlength="6">
+    <button onclick="saveMine()">ติดตามคิวนี้</button>
+  </div>
+
+  <!-- คิวปัจจุบัน -->
+  <div class="card">
+    <div class="label">กำลังถ่ายอยู่</div>
+    <div class="big" id="cur">–</div>
+    <div class="sub" id="curSub">กำลังเชื่อมต่อ…</div>
+  </div>
+
+  <!-- คิวถัดไป -->
+  <div class="card">
+    <h3>คิวถัดไป</h3>
+    <ul class="next" id="nextList"><li style="opacity:.4;font-size:15px;font-weight:400">กำลังโหลด…</li></ul>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+/* ============================================================
+   หน้าลูกค้า — อ่านข้อมูลคิวจาก Firebase แบบเรียลไทม์
+   ============================================================ */
+const boothId = new URLSearchParams(location.search).get('b') || 'default';
+const MINE_KEY = 'pbq_my_queue_' + boothId;
+
+let myNo   = (localStorage.getItem(MINE_KEY) || '').toUpperCase();
+let snap   = null;
+let warned = false;
+
+/* ---------- เชื่อมต่อ Firebase ---------- */
+try {
+  const cfg = window.FIREBASE_CONFIG || {};
+  const unset = v => !v || String(v).indexOf('ใส่ค่าจริง') !== -1;
+  if (unset(cfg.databaseURL) || unset(cfg.apiKey)) throw new Error('ยังไม่ได้ตั้งค่า Firebase');
+  firebase.initializeApp(cfg);
+  firebase.database().ref('booths/' + boothId).on('value', s => {
+    snap = s.val();
+    render();
+  }, err => {
+    document.getElementById('curSub').textContent = 'เชื่อมต่อไม่ได้ — กรุณาถามพนักงานครับ';
+    console.error(err);
+  });
+} catch (e) {
+  document.getElementById('curSub').textContent = 'ยังไม่ได้ตั้งค่า Firebase';
+  console.error(e);
+}
+
+/* ---------- บันทึกเลขคิวของฉัน ---------- */
+function saveMine(){
+  const v = document.getElementById('myNo').value.trim().toUpperCase();
+  if (!v) return;
+  myNo = v;
+  localStorage.setItem(MINE_KEY, v);
+  primeAlert();                       // ปลดล็อกเสียง/สั่น ตอนที่ผู้ใช้กดปุ่ม
+  render();
+}
+function clearMine(){
+  myNo = '';
+  localStorage.removeItem(MINE_KEY);
+  document.getElementById('myNo').value = '';
+  render();
+}
+
+/* ---------- แสดงผล ---------- */
+function render(){
+  const waiting = (snap && snap.waiting) || [];
+  const serving = snap && snap.serving;
+
+  // คิวปัจจุบัน
+  document.getElementById('cur').textContent = serving ? serving.no : '–';
+  document.getElementById('curSub').textContent =
+    serving ? (serving.name || 'กำลังถ่ายรูป') : (snap ? 'ยังไม่เริ่มเรียกคิว' : 'กำลังเชื่อมต่อ…');
+
+  // รายการคิวถัดไป
+  document.getElementById('nextList').innerHTML = waiting.length
+    ? waiting.slice(0,8).map(q =>
+        '<li class="' + (q.no === myNo ? 'me' : '') + '"><span>' + esc(q.no) + '</span>' +
+        '<span class="nm">' + esc(q.name || '') + '</span></li>').join('')
+    : '<li style="opacity:.4;font-size:15px;font-weight:400">ไม่มีคิวรออยู่ — เข้ามาได้เลยครับ</li>';
+
+  // กล่อง "คิวของฉัน"
+  const box = document.getElementById('mine');
+  const setup = document.getElementById('setup');
+  if (myNo) {
+    setup.style.display = 'none';
+    box.style.display = 'block';
+    const idx = waiting.findIndex(q => q.no === myNo);
+
+    if (serving && serving.no === myNo) {
+      box.innerHTML = tpl(myNo, 'ถึงคิวคุณแล้ว!', '', true);
+    } else if (idx === -1) {
+      box.innerHTML = tpl(myNo, snap ? 'ไม่พบคิวนี้' : '…',
+                          snap ? 'อาจถ่ายเสร็จแล้ว หรือกรอกเลขผิด' : '');
+    } else {
+      const avg  = (snap && snap.avgMinutes) || 4;
+      const mins = Math.round((idx + (serving ? 1 : 0)) * avg);
+      box.innerHTML = tpl(myNo, 'เหลืออีก ' + idx + ' คิว',
+                          mins > 0 ? 'ประมาณ ' + mins + ' นาที' : 'คิวคุณเป็นคิวถัดไปแล้ว');
+      if (idx <= 2) alertSoon(idx);
+      else warned = false;
+    }
+  } else {
+    setup.style.display = 'block';
+    box.style.display = 'none';
+  }
+
+  // ข้อมูลเก่าเกิน 3 นาที = เตือน
+  const age = snap && snap.updatedAt ? Date.now() - snap.updatedAt : 0;
+  document.getElementById('stale').style.display = (age > 180000) ? 'block' : 'none';
+  document.getElementById('foot').textContent =
+    snap && snap.updatedAt
+      ? 'อัปเดตล่าสุด ' + new Date(snap.updatedAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})
+      : '';
+}
+
+function tpl(no, main, sub, big){
+  return '<div class="mno">คิวของคุณคือ ' + esc(no) + '</div>' +
+         '<div class="left' + (big ? ' pulse' : '') + '">' + main + '</div>' +
+         (sub ? '<div class="est">' + sub + '</div>' : '') +
+         '<button class="chg" onclick="clearMine()">เปลี่ยนเลขคิว</button>';
+}
+function esc(t){ return String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------- แจ้งเตือนเมื่อใกล้ถึงคิว ---------- */
+let actx = null;
+function primeAlert(){                 // ต้องสร้างตอนผู้ใช้กดปุ่ม ไม่งั้นมือถือบล็อกเสียง
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){}
+}
+function alertSoon(idx){
+  if (warned) return;
+  warned = true;
+  try { if (navigator.vibrate) navigator.vibrate([200,100,200,100,400]); } catch(e){}
+  try {
+    if (actx) {
+      if (actx.state === 'suspended') actx.resume();
+      [880,1174,880].forEach((f,i) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.frequency.value = f; o.connect(g); g.connect(actx.destination);
+        const t = actx.currentTime + i*0.3;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.3, t+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t+0.5);
+        o.start(t); o.stop(t+0.55);
+      });
+    }
+  } catch(e){}
+  document.title = (idx === 0 ? '⚡ คิวคุณถัดไปแล้ว!' : '⚡ เหลืออีก ' + idx + ' คิว');
+}
+
+/* ---------- เริ่มต้น ---------- */
+document.getElementById('myNo').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveMine();
+});
+if (myNo) document.getElementById('myNo').value = myNo;
+setInterval(render, 30000);            // อัปเดตคำเตือน "ข้อมูลเก่า" เป็นระยะ
+render();
+</script>
+</body>
+</html>

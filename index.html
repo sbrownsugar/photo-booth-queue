@@ -190,6 +190,7 @@
         <div class="urlrow">
           <button class="btn ghost" style="flex:1" onclick="printQR()">🖨️ พิมพ์ป้าย QR</button>
         </div>
+        <div class="qrhint" id="staffHint" style="margin-top:14px"></div>
       </div>
 
       <div class="card">
@@ -277,7 +278,11 @@ function loadSettings(){
   let s;
   try { s = JSON.parse(localStorage.getItem(SET_KEY)); } catch(e){ s = null; }
   if (!s) s = {};
-  if (!s.boothId) {                                   // รหัสบูธ สุ่มครั้งเดียว ใช้ตลอด
+  // ถ้าเปิดเว็บด้วยลิงก์ที่มี ?b=xxxx ให้ใช้รหัสบูธนั้น — กัน QR ที่พิมพ์ไปแล้วใช้ไม่ได้
+  // เวลาเปลี่ยนเครื่อง เปลี่ยนเบราว์เซอร์ หรือล้างข้อมูลเบราว์เซอร์
+  const urlBooth = new URLSearchParams(location.search).get('b');
+  if (urlBooth) s.boothId = urlBooth;
+  if (!s.boothId) {                                   // ไม่มีเลย = สุ่มใหม่ครั้งแรกครั้งเดียว
     s.boothId = 'b' + Math.random().toString(36).slice(2,8);
   }
   if (!s.baseUrl && location.protocol.startsWith('http')) {
@@ -318,6 +323,7 @@ function renderQR(){
                      'แล้ว QR จะขึ้นมาเองครับ</div>';
     drawQRInto(document.getElementById('dQR'), null, 0);
     document.getElementById('dQRText').textContent = '';
+    renderStaffHint();
     return;
   }
   if (url !== lastQRUrl) {
@@ -330,6 +336,21 @@ function renderQR(){
     '<br><span style="font-size:11.5px;opacity:.7;word-break:break-all">' + esc(url) + '</span>';
   drawQRInto(document.getElementById('dQR'), url, 150);
   document.getElementById('dQRText').textContent = 'สแกนเช็กคิวจากมือถือได้เลย';
+  renderStaffHint();
+}
+
+// ลิงก์เปิดหน้าพนักงานที่ "ล็อกรหัสบูธ" ไว้ — บุ๊กมาร์กอันนี้ไว้ QR ที่พิมพ์แล้วจะใช้ได้ตลอด
+function renderStaffHint(){
+  const el = document.getElementById('staffHint');
+  if (!el) return;
+  const base = (settings.baseUrl || '').trim().replace(/index\.html.*$/i,'').replace(/\/?$/,'/');
+  const link = base ? base + '?b=' + settings.boothId : '';
+  el.innerHTML =
+    'รหัสบูธ <b style="color:var(--text)">' + esc(settings.boothId) + '</b>' +
+    (link ? '<br><span style="font-size:12px">บุ๊กมาร์กลิงก์นี้ไว้เปิดหน้าพนักงานครั้งหน้า ' +
+            'QR ที่พิมพ์แล้วจะยังใช้ได้เสมอ<br>' +
+            '<a href="' + esc(link) + '" style="color:var(--brand);word-break:break-all">' +
+            esc(link) + '</a></span>' : '');
 }
 
 function drawQRInto(el, url, size){
@@ -610,7 +631,7 @@ function announce(q){
 }
 
 function openDisplay(){
-  const win = window.open(location.pathname + '#display', 'pbq_display',
+  const win = window.open(location.pathname + location.search + '#display', 'pbq_display',
                           'width=1280,height=720,menubar=no,toolbar=no');
   if (!win) alert('เบราว์เซอร์บล็อกป๊อปอัป — กรุณาอนุญาตป๊อปอัปของหน้านี้');
 }
